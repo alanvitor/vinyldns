@@ -108,8 +108,7 @@ class OidcAuthenticator @Inject() (wsClient: WSClient, configuration: Configurat
 
   def getCodeCall(requestURI: String = ""): Uri = {
     val nonce = new Nonce()
-    val loginId = UUID.randomUUID().toString
-    val redirectUri = s"${oidcInfo.redirectUri}/callback/${loginId}:${java.util.Base64.getEncoder.encodeToString(requestURI.getBytes)}"
+    val redirectUri = s"${oidcInfo.redirectUri}/callback/"
 
     val query = Query(
       "client_id" -> oidcInfo.clientId,
@@ -119,7 +118,7 @@ class OidcAuthenticator @Inject() (wsClient: WSClient, configuration: Configurat
       "nonce" -> nonce.toString
     )
 
-    logger.info(s"Generated LoginId $loginId")
+    logger.info(s"New oidc call. redirectUri: ${redirectUri}")
     Uri(s"${oidcInfo.authorizationEndpoint}").withQuery(query)
   }
 
@@ -246,16 +245,16 @@ class OidcAuthenticator @Inject() (wsClient: WSClient, configuration: Configurat
     } yield claims
   }
 
-  def oidcCallback(code: AuthorizationCode, loginId: String)(
+  def oidcCallback(code: AuthorizationCode)(
       implicit executionContext: ExecutionContext
   ): EitherT[IO, ErrorResponse, JWTClaimsSet] =
     EitherT {
-      val redirectUriString = s"${oidcInfo.redirectUri}/callback/${loginId}"
+      val redirectUriString = s"${oidcInfo.redirectUri}/callback/"
       val redirectUri = new URI(redirectUriString)
       val codeGrant = new AuthorizationCodeGrant(code, redirectUri)
       val request = new TokenRequest(tokenEndpoint, clientAuth, codeGrant)
 
-      logger.info(s"Sending token_id request for loginId [$loginId]")
+      logger.info(s"Sending token_id request")
       IO(request.toHTTPRequest.send()).map(handleCallbackResponse)
     }
 

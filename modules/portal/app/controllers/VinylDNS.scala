@@ -135,19 +135,19 @@ class VinylDNS @Inject() (
   private val userAction = securitySupport.apiAction
   private val frontendAction = securitySupport.frontendAction
 
-  def oidcCallback(loginId: String): Action[AnyContent] = Action.async { implicit request =>
-    logger.info(s"Received callback for LoginId [$loginId]")
+  def oidcCallback(): Action[AnyContent] = Action.async { implicit request =>
+    logger.info(s"Received callback")
     val setUrl =
-      s"${oidcAuthenticator.redirectUriString}set-oidc-session/$loginId?${request.rawQueryString}"
+      s"${oidcAuthenticator.redirectUriString}set-oidc-session/?${request.rawQueryString}"
     Future(Ok(views.html.setOidcSession(setUrl)))
   }
 
-  def setOidcSession(loginId: String): Action[AnyContent] = Action.async { implicit request =>
-    logger.info(s"Setting session for LoginId [$loginId]")
+  def setOidcSession(): Action[AnyContent] = Action.async { implicit request =>
+    logger.info(s"Setting session")
 
     val details = for {
       code <- EitherT.fromEither[IO](oidcAuthenticator.getCodeFromAuthResponse(request))
-      validToken <- oidcAuthenticator.oidcCallback(code, loginId)
+      validToken <- oidcAuthenticator.oidcCallback(code)
       userDetails <- EitherT.fromEither[IO](oidcAuthenticator.getUserFromClaims(validToken))
       userCreate <- EitherT.right[ErrorResponse](processLoginWithDetails(userDetails))
     } yield (userCreate, validToken)
@@ -156,20 +156,11 @@ class VinylDNS @Inject() (
       .map {
         case Right((user, token)) =>
           logger.info(
-            s"LoginId [$loginId] complete: --LOGIN-- user [${user.userName}] logged in with id ${user.id}"
+            s"Complete: -- LOGIN -- user [${user.userName}] logged in with id ${user.id}"
           )
-
-          val redirectLocation =
-            Try {
-              new String(java.util.Base64.getDecoder.decode(loginId.split(":").last))
-            } match {
-              case Success(x) => if (x.nonEmpty) x else "/index"
-              case Failure(_) => "/index"
-            }
-
-          Redirect(redirectLocation).withSession(ID_TOKEN -> token.toString)
+          Redirect("/index").withSession(ID_TOKEN -> token.toString)
         case Left(err) =>
-          logger.error(s"LoginId [$loginId] failed with error: $err")
+          logger.error(s"Login failed with error: $err")
           InternalServerError(
             views.html.systemMessage(
               """
